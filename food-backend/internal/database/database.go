@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"time"
 
+	"food-backend/internal/models"
+
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -35,7 +37,24 @@ func Connect(ctx context.Context, dsn string) (*gorm.DB, error) {
 		return nil, fmt.Errorf("ping database: %w", err)
 	}
 
-	slog.Info("PostgreSQL connected")
+	// Enable PostgreSQL UUID generation
+	if err := db.Exec(`CREATE EXTENSION IF NOT EXISTS "pgcrypto"`).Error; err != nil {
+		return nil, fmt.Errorf("enable pgcrypto: %w", err)
+	}
+
+	// Automatically create/update tables
+	if err := db.AutoMigrate(
+		&models.User{},
+		&models.FoodPartner{},
+		&models.Food{},
+		&models.Like{},
+		&models.Save{},
+	); err != nil {
+		return nil, fmt.Errorf("auto migrate: %w", err)
+	}
+
+	slog.Info("PostgreSQL connected and migrations completed")
+
 	return db, nil
 }
 

@@ -11,9 +11,9 @@ import (
 )
 
 type AuthService struct {
-	userRepo         *repository.UserRepository
-	foodPartnerRepo  *repository.FoodPartnerRepository
-	jwtSecret        string
+	userRepo        *repository.UserRepository
+	foodPartnerRepo *repository.FoodPartnerRepository
+	jwtSecret       string
 }
 
 func NewAuthService(
@@ -92,12 +92,13 @@ func (s *AuthService) RegisterFoodPartner(ctx context.Context, req dto.RegisterF
 	}
 
 	partner := &models.FoodPartner{
-		Name:        req.Name,
-		Email:       req.Email,
-		Password:    hashedPassword,
-		Phone:       req.Phone,
-		Address:     req.Address,
-		ContactName: req.ContactName,
+		Name:             req.Name,
+		Email:            req.Email,
+		Password:         hashedPassword,
+		Phone:            req.Phone,
+		Address:          req.Address,
+		ContactName:      req.ContactName,
+		DeliveryRadiusKM: DefaultFeedRadiusKM,
 	}
 
 	if err := s.foodPartnerRepo.Create(ctx, partner); err != nil {

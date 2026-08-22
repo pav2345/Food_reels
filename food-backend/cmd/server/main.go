@@ -44,14 +44,31 @@ func main() {
 	likeRepo := repository.NewLikeRepository(db)
 	saveRepo := repository.NewSaveRepository(db)
 
-	authService := services.NewAuthService(userRepo, foodPartnerRepo, cfg.JWT.Secret)
 	storageService := services.NewStorageService(cfg.Storage)
+	geoService := services.NewGeoService()
+	locationService := services.NewLocationService(userRepo, geoService, nil, cfg.Location.UpdateDistanceKM)
+	openService := services.NewRestaurantOpenService()
+	deliveryService := services.NewDeliveryService(geoService, userRepo, foodPartnerRepo, openService)
+	recommendationService := services.NewRecommendationService()
+	feedService := services.NewFeedService(
+		foodPartnerRepo,
+		foodRepo,
+		saveRepo,
+		geoService,
+		openService,
+		deliveryService,
+		recommendationService,
+		cfg.Location.FeedLocalRadiusKM,
+		cfg.Location.LocalFeedPercent,
+	)
+	authService := services.NewAuthService(userRepo, foodPartnerRepo, cfg.JWT.Secret)
 	foodService := services.NewFoodService(db, foodRepo, likeRepo, saveRepo, storageService)
-	foodPartnerService := services.NewFoodPartnerService(foodPartnerRepo, foodRepo)
+	foodPartnerService := services.NewFoodPartnerService(foodPartnerRepo, foodRepo, storageService, geoService)
 
-	authHandler := handlers.NewAuthHandler(authService)
+	authHandler := handlers.NewAuthHandler(authService, locationService, feedService)
 	foodHandler := handlers.NewFoodHandler(foodService)
-	foodPartnerHandler := handlers.NewFoodPartnerHandler(foodPartnerService)
+	foodPartnerHandler := handlers.NewFoodPartnerHandler(foodPartnerService, openService)
+	feedHandler := handlers.NewFeedHandler(locationService, feedService)
 	authMiddleware := middleware.NewAuthMiddleware(cfg.JWT.Secret, userRepo, foodPartnerRepo)
 
 	router := gin.New()
@@ -79,6 +96,7 @@ func main() {
 		AuthHandler:        authHandler,
 		FoodHandler:        foodHandler,
 		FoodPartnerHandler: foodPartnerHandler,
+		FeedHandler:        feedHandler,
 		AuthMiddleware:     authMiddleware,
 	})
 

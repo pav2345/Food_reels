@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"time"
 
 	"food-backend/internal/models"
 
@@ -46,6 +47,64 @@ func (r *UserRepository) Create(ctx context.Context, user *models.User) error {
 	return r.db.WithContext(ctx).Create(user).Error
 }
 
+func (r *UserRepository) UpdateLocation(ctx context.Context, userID uuid.UUID, latitude, longitude float64, updatedAt time.Time) error {
+	return r.db.WithContext(ctx).
+		Model(&models.User{}).
+		Where("id = ?", userID).
+		Updates(map[string]interface{}{
+			"latitude":                    latitude,
+			"longitude":                   longitude,
+			"current_latitude":            latitude,
+			"current_longitude":           longitude,
+			"last_location_updated":       updatedAt,
+			"current_location_updated_at": updatedAt,
+			"updated_at":                  updatedAt,
+		}).Error
+}
+
+func (r *UserRepository) SetSavedLocation(ctx context.Context, userID uuid.UUID, latitude, longitude float64, updatedAt time.Time) error {
+	return r.db.WithContext(ctx).
+		Model(&models.User{}).
+		Where("id = ?", userID).
+		Updates(map[string]interface{}{
+			"saved_latitude":  latitude,
+			"saved_longitude": longitude,
+			"updated_at":      updatedAt,
+		}).Error
+}
+
+func (r *UserRepository) InitializeLocation(ctx context.Context, userID uuid.UUID, latitude, longitude float64, updatedAt time.Time) error {
+	return r.db.WithContext(ctx).
+		Model(&models.User{}).
+		Where("id = ?", userID).
+		Updates(map[string]interface{}{
+			"latitude":                    latitude,
+			"longitude":                   longitude,
+			"saved_latitude":              latitude,
+			"saved_longitude":             longitude,
+			"current_latitude":            latitude,
+			"current_longitude":           longitude,
+			"last_location_updated":       updatedAt,
+			"current_location_updated_at": updatedAt,
+			"updated_at":                  updatedAt,
+		}).Error
+}
+
+func (r *UserRepository) UpdateCurrentLocation(ctx context.Context, userID uuid.UUID, latitude, longitude float64, updatedAt time.Time) error {
+	return r.db.WithContext(ctx).
+		Model(&models.User{}).
+		Where("id = ?", userID).
+		Updates(map[string]interface{}{
+			"latitude":                    latitude,
+			"longitude":                   longitude,
+			"current_latitude":            latitude,
+			"current_longitude":           longitude,
+			"last_location_updated":       updatedAt,
+			"current_location_updated_at": updatedAt,
+			"updated_at":                  updatedAt,
+		}).Error
+}
+
 type FoodPartnerRepository struct {
 	db *gorm.DB
 }
@@ -82,6 +141,25 @@ func (r *FoodPartnerRepository) Create(ctx context.Context, partner *models.Food
 	return r.db.WithContext(ctx).Create(partner).Error
 }
 
+func (r *FoodPartnerRepository) FindAllLocated(ctx context.Context) ([]models.FoodPartner, error) {
+	var partners []models.FoodPartner
+	err := r.db.WithContext(ctx).
+		Where("latitude IS NOT NULL AND longitude IS NOT NULL").
+		Find(&partners).Error
+	return partners, err
+}
+
+func (r *FoodPartnerRepository) UpdateProfile(ctx context.Context, partnerID uuid.UUID, updates map[string]interface{}) error {
+	if len(updates) == 0 {
+		return nil
+	}
+
+	return r.db.WithContext(ctx).
+		Model(&models.FoodPartner{}).
+		Where("id = ?", partnerID).
+		Updates(updates).Error
+}
+
 type FoodRepository struct {
 	db *gorm.DB
 }
@@ -108,6 +186,36 @@ func (r *FoodRepository) FindByPartnerID(ctx context.Context, partnerID uuid.UUI
 		Where("food_partner_id = ?", partnerID).
 		Find(&foods).Error
 	return foods, err
+}
+
+func (r *FoodRepository) FindAvailableByPartnerIDsWithPartner(ctx context.Context, partnerIDs []uuid.UUID) ([]models.Food, error) {
+	if len(partnerIDs) == 0 {
+		return []models.Food{}, nil
+	}
+
+	var foods []models.Food
+	err := r.db.WithContext(ctx).
+		Preload("FoodPartner").
+		Where("available = ? AND food_partner_id IN ?", true, partnerIDs).
+		Find(&foods).Error
+	return foods, err
+}
+
+func (r *FoodRepository) FindLikedFoodIDs(ctx context.Context, userID uuid.UUID) (map[uuid.UUID]bool, error) {
+	var likes []models.Like
+	err := r.db.WithContext(ctx).
+		Select("food_id").
+		Where("user_id = ?", userID).
+		Find(&likes).Error
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[uuid.UUID]bool, len(likes))
+	for _, like := range likes {
+		result[like.FoodID] = true
+	}
+	return result, nil
 }
 
 func (r *FoodRepository) IncrementLikes(ctx context.Context, foodID uuid.UUID, delta int) error {
